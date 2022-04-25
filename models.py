@@ -1,5 +1,5 @@
 import torch
-import genbmm
+# import genbmm
 
 class HMM(torch.nn.Module):
 	"""
@@ -142,7 +142,11 @@ def log_domain_matmul(log_A, log_B, use_max=False):
 	#elementwise_sum = log_A_expanded + log_B_expanded
 	#out = torch.logsumexp(elementwise_sum, dim=1)
 
-	out = genbmm.logbmm(log_A.unsqueeze(0).contiguous(), log_B.unsqueeze(1).contiguous())[0]
+	# out = genbmm.logbmm(log_A.unsqueeze(0).contiguous(), log_B.unsqueeze(1).contiguous())[0]
+	a = log_A.unsqueeze(-1)
+	# print("a")
+	b = log_B.unsqueeze(-3)
+	out = (a + b).logsumexp(-2)
 
 	return out
 
