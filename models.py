@@ -9,13 +9,15 @@ class HMM(torch.nn.Module):
 	- viterbi(): computes the most likely state sequence.
 	- sample(): draws a sample from p(x).
 	"""
-	def __init__(self, config):
+	def __init__(self, M, N, out_dim):
 		super(HMM, self).__init__()
-		self.M = config.M # number of possible observations
-		self.N = config.N # number of states
+		self.M = M # number of possible observations (5)
+		self.N = N # number of states (107)
+		self.out_dim = out_dim
 		self.unnormalized_state_priors = torch.nn.Parameter(torch.randn(self.N))
 		self.transition_model = TransitionModel(self.N)
 		self.emission_model = EmissionModel(self.N,self.M)
+		self.transform = torch.nn.Linear(self.N, self.out_dim)
 		self.is_cuda = torch.cuda.is_available()
 		if self.is_cuda: self.cuda()
 
@@ -32,11 +34,13 @@ class HMM(torch.nn.Module):
 			T = T.cuda()
 
 		batch_size = x.shape[0]; T_max = x.shape[1]
-		log_state_priors = torch.nn.functional.log_softmax(self.unnormalized_state_priors, dim=0)
-		log_alpha = torch.zeros(batch_size, T_max, self.N)
+		log_state_priors = torch.nn.functional.log_softmax(self.unnormalized_state_priors, dim=0) # N
+		print("l_sp:", log_state_priors.shape)
+		log_alpha = torch.zeros(batch_size, T_max, self.N) # bs x 180 x N
+		print("l_alpha:", log_alpha.shape)
 		if self.is_cuda: log_alpha = log_alpha.cuda()
 
-		log_alpha[:, 0, :] = self.emission_model(x[:,0]) + log_state_priors
+		log_alpha[:, 0, :] = self.emission_model(x[:,0]) + log_state_priors # 
 		print(log_alpha[:, 0, :])
 		for t in range(1, T_max):
 			log_alpha[:, t, :] = self.emission_model(x[:,t]) + self.transition_model(log_alpha[:, t-1, :], use_max=False)
@@ -46,6 +50,7 @@ class HMM(torch.nn.Module):
 
 		# Select the sum for the final timestep (each x has different length).
 		log_probs = torch.gather(log_sums, 1, T.view(-1,1) - 1)
+
 		return log_probs
 
 	def sample(self, T=10):
@@ -200,8 +205,9 @@ class EmissionModel(torch.nn.Module):
 
 		Get observation probabilities
 		"""
+		print("emis_inp: ", x_t.shape)
 		# Each col needs to add up to 1 (in probability domain)
 		emission_matrix = torch.nn.functional.log_softmax(self.unnormalized_emission_matrix, dim=1)
-		out = emission_matrix[:, x_t].transpose(0,1)
-
+		out = emission_matrix[:, x_t].transpose(0,1) # bs X M x M
+		print("emis_out: ",out.shape)
 		return out
